@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +54,11 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		return betproxy.HTTPText(http.StatusOK, nil, html, req), nil
 	}
 
+	header := http.Header{
+		"Expires":       []string{"Fri, 01 Jan 1980 00:00:00 GMT"},
+		"Pragma":        []string{"no-cache"},
+		"Cache-Control": []string{"no-cache, max-age=0, must-revalidate"},
+	}
 	switch action {
 	case "/info/refs":
 		if !g.checkRepo(repoRoot) {
@@ -75,10 +79,10 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		header := http.Header{
-			"Content-Type": []string{fmt.Sprintf("application/x-git-%s-advertisement", service)},
-		}
-		body := fmt.Sprintf("%s0000%s", g.packet(fmt.Sprintf("# service=git-%s\n", service)), refs)
+		serverAdvert := fmt.Sprintf("# service=git-%s\n", service)
+		body := fmt.Sprintf("%04x%s0000%s", len(serverAdvert)+4, serverAdvert, refs)
+
+		header.Set("Content-Type", fmt.Sprintf("application/x-git-%s-advertisement", service))
 		return betproxy.HTTPText(http.StatusOK, header, body, req), nil
 
 	case "/git-upload-pack":
@@ -103,9 +107,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 
-		header := http.Header{
-			"Content-Type": []string{"application/x-git-upload-pack-result"},
-		}
+		header.Set("Content-Type", "application/x-git-upload-pack-result")
 		return betproxy.NewResponse(http.StatusOK, header, NewStdoutReader(stdout, cmd), req), stdin.Close()
 	}
 
@@ -140,14 +142,6 @@ func (g *Server) updateLoop() {
 		}
 		g.clone(remote)
 	}
-}
-
-func (g *Server) packet(str string) []byte {
-	s := strconv.FormatInt(int64(len(str)+4), 16)
-	if len(s)%4 != 0 {
-		s = strings.Repeat("0", 4-len(s)%4) + s
-	}
-	return []byte(s + str)
 }
 
 func (g *Server) checkRepo(dir string) bool {

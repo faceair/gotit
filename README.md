@@ -25,7 +25,7 @@ Gotit is a Golang package caching proxy. Just change the proxy settings of your 
 
 ### Requirements
 
-Please confirm that the `git` and `go` executable files in the `PATH` environment variable.
+Make sure the `git` and `go` executable is on your `PATH` variable
 
 ### Installation
 
