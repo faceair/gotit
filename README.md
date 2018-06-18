@@ -11,41 +11,41 @@
 
 [中文文档](README.zh.md)
 
-Gotit is a Golang package caching proxy. Just change the proxy settings of your package management tool to Gotit, and Gotit will automatically pull, cache, and update all dependencies for you.
+Gotit is a Golang package cache proxy, proudly powered by [betproxy](https://github.com/faceair/betproxy).
+
+Just change the proxy settings of your package management tool to Gotit, and Gotit will automatically pull, cache and update all dependencies for you.
 
 ## Features
 
-- Deploying Gotit in the corporate intranet can speed up the pull of dependencies while reducing external network bandwidth usage
-- The more people use Gotit, the more the cached dependencies will be, the more obvious the acceleration effect will be
-- Gotit has caching. In extreme cases, it can continue to provide services after disconnecting the external network. It is more reliable than relying on the external network
-- Gotit can automatically update dependencies without worrying about old versions of the cache
-- Transparency to package management tools, theoretically supporting for all Go package management tools (needs to turn off HTTPS certificate verification)
+- **Faster** Pulling is very fast when hitting the cache.
+- **Reliable** Gotit can continue working on the cache after disconnecting or deleting the origin repository.
+- **Transparency** In theory, Gotit can work with all Go package management tools. (needs to skip HTTPS certificate verification)
 
 ## Deployment
 
 ### Requirements
 
-Make sure the `git` and `go` executable is on your `PATH` variable
+Make sure the `git` and `go` executable is on your `PATH` variable.
 
 ### Installation
 
 ```
-go install github.com/faceair/gotit
+go get github.com/faceair/gotit
 ```
 
 ### Run
 
-Run Gotti on port 8080
+Run Gotit on port 8080
 ```
-$GOPATH/bin/gotti -port 8080
+$GOPATH/bin/gotit -port 8080
 ```
-Run `gotit` directly to view other command-line param's usage help. Gotit use system `GOPATH` to save dependencies by default.
+Run `gotit` directly see help for other commands. Gotit use system `GOPATH` to save dependencies by default.
 
 ### Configure dependency management tool
 
 #### dep
 
-dep does not support turning off https certificate verification, we need [patch](https://github.com/faceair/dep/commit/19ef30fc8abae44709d5a732f34065d2919d8377) dep. You can build it yourself in this [fork source](https://github.com/faceair/dep) or [download modified binary files](https://github.com/faceair/dep/releases/tag/v0.4.2).
+dep don't support skip HTTPS certificate verification, we need [patch](https://github.com/faceair/dep/commit/43c5e6bf4597bc644a9326d16849b986076b7921) dep. You can build it yourself in this [fork source](https://github.com/faceair/dep) or [download modified binary files](https://github.com/faceair/dep/releases/latest).
 
 Then set HTTPS_PROXY to Gotit address
 ```
@@ -57,15 +57,22 @@ export HTTPS_PROXY=http://127.0.0.1:8080
 dep ensure -v
 ```
 
+#### go get
+
+```
+env HTTPS_PROXY=http://127.0.0.1:8080 GIT_SSL_NO_VERIFY=true go get -v -insecure github.com/faceair/gotit
+```
+
 #### other
+
 Todo
 
 ## FAQ
 
-1. What is the difference between Gotit and the forward proxy with cache?
+1. When does Gotit update the repository?
 
-Synchronization code in git http protocol is a post request so cannot be cached. Some package host on ssh protocol and cannot use normal https forward proxy, `go get` is used in Gotit to bypass this problem.
+After the client pulls the code, Gotit checks the repository for updates. So if you do not update to the latest version at a time, you can wait and try again.
 
-2. When does Gotit update its dependency?
+2. What is the difference between Gotit and the forward proxy with cache?
 
-Each time the client pulls the code, the Gotit will check the update of this repository, so if you do not pull the latest code at a time, you can wait a moment and try again.
+Pull code in git http protocol is a post request, it cannot be cached.

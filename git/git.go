@@ -1,7 +1,6 @@
 package git
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,7 +15,7 @@ import (
 	"github.com/faceair/betproxy"
 )
 
-var vscRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+?)(/info/refs|/git-upload-pack|\?|$)`)
+var vscRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+?)(/info/refs|/git-upload-pack|\?go-get=1)`)
 
 func NewServer(gopath string) *Server {
 	err := os.Setenv("GOPATH", gopath)
@@ -39,43 +38,40 @@ type Server struct {
 }
 
 func (g *Server) Do(req *http.Request) (*http.Response, error) {
-	var repoRoot string
-	var action string
-	if m := vscRegex.FindStringSubmatch(req.URL.String()); m != nil {
-		repoRoot = m[1]
-		action = m[3]
-	} else {
-		return betproxy.HTTPError(http.StatusBadRequest, "", req), nil
+	match := vscRegex.FindStringSubmatch(req.URL.String())
+	if match == nil {
+		return betproxy.HTTPError(http.StatusBadRequest, "url not match", req), nil
 	}
 
-	value := req.FormValue("go-get")
-	if value == "1" {
-		html := fmt.Sprintf(`<meta name="go-import" content="%s git https://%s">`, repoRoot, repoRoot)
-		return betproxy.HTTPText(http.StatusOK, nil, html, req), nil
-	}
+	repoPath := match[1]
+	urlPath := match[3]
 
 	header := http.Header{
 		"Expires":       []string{"Fri, 01 Jan 1980 00:00:00 GMT"},
 		"Pragma":        []string{"no-cache"},
 		"Cache-Control": []string{"no-cache, max-age=0, must-revalidate"},
 	}
-	switch action {
+	switch urlPath {
+	case "?go-get=1":
+		html := fmt.Sprintf(`<meta name="go-import" content="%s git https://%s">`, repoPath, repoPath)
+		return betproxy.HTTPText(http.StatusOK, nil, html, req), nil
+
 	case "/info/refs":
-		if !g.checkRepo(repoRoot) {
-			err := g.clone(repoRoot)
+		if !g.checkRepo(repoPath) {
+			err := g.clone(repoPath)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		select {
-		case g.queue <- repoRoot:
+		case g.queue <- repoPath:
 		default:
 		}
 
 		service := strings.Replace(req.FormValue("service"), "git-", "", 1)
 		args := []string{service, "--stateless-rpc", "--advertise-refs", "."}
-		refs, err := g.cmd(repoRoot, args...).Output()
+		refs, err := g.cmd(repoPath, args...).Output()
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +83,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 
 	case "/git-upload-pack":
 		args := []string{"upload-pack", "--stateless-rpc", "."}
-		cmd := g.cmd(repoRoot, args...)
+		cmd := g.cmd(repoPath, args...)
 
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
@@ -111,14 +107,14 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		return betproxy.NewResponse(http.StatusOK, header, NewStdoutReader(stdout, cmd), req), stdin.Close()
 	}
 
-	return nil, errors.New("unknown request")
+	return betproxy.HTTPError(http.StatusBadRequest, "url not match", req), nil
 }
 
-func (g *Server) clone(remote string) error {
-	g.upTime.Store(remote, time.Now())
+func (g *Server) clone(repoPath string) error {
+	g.upTime.Store(repoPath, time.Now())
 
 	logger := NewLogBuffer("Go Get")
-	cmd := exec.Command("go", []string{"get", "-d", "-f", "-u", "-v", remote}...)
+	cmd := exec.Command("go", []string{"get", "-d", "-f", "-u", "-v", repoPath}...)
 	cmd.Dir = g.gopath
 	cmd.Stderr = logger
 	err := cmd.Run()
@@ -134,13 +130,13 @@ func (g *Server) clone(remote string) error {
 
 func (g *Server) updateLoop() {
 	for {
-		remote := <-g.queue
-		if ut, ok := g.upTime.Load(remote); ok {
+		repoPath := <-g.queue
+		if ut, ok := g.upTime.Load(repoPath); ok {
 			if ut.(time.Time).Sub(time.Now()) < time.Minute {
 				continue
 			}
 		}
-		g.clone(remote)
+		g.clone(repoPath)
 	}
 }
 
