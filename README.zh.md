@@ -57,6 +57,14 @@ export HTTPS_PROXY=http://127.0.0.1:8080
 dep ensure -v
 ```
 
+#### glide
+
+glide 也需要打 [Patch](https://github.com/faceair/glide/commit/54b926f67677ed3a5e1b6354c491907d8e2cfabf), [下载二进制文件](https://github.com/faceair/glide/releases/latest).
+
+```
+HTTPS_PROXY=http://127.0.0.1:8080 glide install
+```
+
 #### go get
 
 ```
