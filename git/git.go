@@ -27,7 +27,7 @@ func NewServer(gopath string) *Server {
 
 	g := &Server{
 		gopath: gopath,
-		queue:  make(chan *updateTask, 1024),
+		queue:  make(chan *cloneTask, 1024),
 	}
 	go g.cloneLoop()
 	return g
@@ -36,7 +36,7 @@ func NewServer(gopath string) *Server {
 // Server implement interface of betproxy.Client
 type Server struct {
 	gopath string
-	queue  chan *updateTask
+	queue  chan *cloneTask
 	upTime sync.Map
 }
 
@@ -62,12 +62,12 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 
 	case "/info/refs":
 		if !g.checkRepo(repoPath) {
-			task := newUpdateTask(repoPath)
+			task := newCloneTask(repoPath)
 			g.queue <- task
 			<-task.Done()
 		} else {
 			select {
-			case g.queue <- newUpdateTask(repoPath):
+			case g.queue <- newCloneTask(repoPath):
 			default:
 			}
 		}
@@ -207,18 +207,18 @@ func (l *LogBuffer) String() string {
 	return string(l.buffer)
 }
 
-func newUpdateTask(repoPath string) *updateTask {
-	return &updateTask{
+func newCloneTask(repoPath string) *cloneTask {
+	return &cloneTask{
 		repoPath: repoPath,
 		done:     make(chan struct{}),
 	}
 }
 
-type updateTask struct {
+type cloneTask struct {
 	repoPath string
 	done     chan struct{}
 }
 
-func (t *updateTask) Done() chan struct{} {
+func (t *cloneTask) Done() chan struct{} {
 	return t.done
 }
