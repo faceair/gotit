@@ -27,16 +27,16 @@ func NewServer(gopath string) *Server {
 
 	g := &Server{
 		gopath: gopath,
-		queue:  make(chan string, 1024),
+		queue:  make(chan *updateTask, 1024),
 	}
-	go g.updateLoop()
+	go g.cloneLoop()
 	return g
 }
 
 // Server implement interface of betproxy.Client
 type Server struct {
 	gopath string
-	queue  chan string
+	queue  chan *updateTask
 	upTime sync.Map
 }
 
@@ -62,15 +62,14 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 
 	case "/info/refs":
 		if !g.checkRepo(repoPath) {
-			err := g.clone(repoPath)
-			if err != nil {
-				return nil, err
+			task := newUpdateTask(repoPath)
+			g.queue <- task
+			<-task.Done()
+		} else {
+			select {
+			case g.queue <- newUpdateTask(repoPath):
+			default:
 			}
-		}
-
-		select {
-		case g.queue <- repoPath:
-		default:
 		}
 
 		service := strings.Replace(req.FormValue("service"), "git-", "", 1)
@@ -114,9 +113,30 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	return betproxy.HTTPError(http.StatusBadRequest, "url not match", req), nil
 }
 
-func (g *Server) clone(repoPath string) error {
-	g.upTime.Store(repoPath, time.Now())
+func (g *Server) cloneLoop() {
+	for {
+		task := <-g.queue
+		if g.shouldUpdate(task.repoPath) {
+			if err := g.clone(task.repoPath); err != nil {
+				log.Printf("Clone Failed: %s", err.Error())
+			}
+		}
+		close(task.Done())
+	}
+}
 
+func (g *Server) shouldUpdate(repoPath string) bool {
+	now := time.Now()
+	if ut, ok := g.upTime.Load(repoPath); ok {
+		if ut.(time.Time).Sub(now) < time.Hour {
+			return false
+		}
+	}
+	g.upTime.Store(repoPath, now)
+	return true
+}
+
+func (g *Server) clone(repoPath string) error {
 	logger := NewLogBuffer("Go Get")
 	cmd := exec.Command("go", []string{"get", "-d", "-f", "-u", "-v", repoPath}...)
 	cmd.Dir = g.gopath
@@ -130,18 +150,6 @@ func (g *Server) clone(repoPath string) error {
 		}
 	}
 	return err
-}
-
-func (g *Server) updateLoop() {
-	for {
-		repoPath := <-g.queue
-		if ut, ok := g.upTime.Load(repoPath); ok {
-			if ut.(time.Time).Sub(time.Now()) < time.Minute {
-				continue
-			}
-		}
-		g.clone(repoPath)
-	}
 }
 
 func (g *Server) checkRepo(dir string) bool {
@@ -197,4 +205,20 @@ func (l *LogBuffer) Write(p []byte) (n int, err error) {
 // String return cached logs
 func (l *LogBuffer) String() string {
 	return string(l.buffer)
+}
+
+func newUpdateTask(repoPath string) *updateTask {
+	return &updateTask{
+		repoPath: repoPath,
+		done:     make(chan struct{}),
+	}
+}
+
+type updateTask struct {
+	repoPath string
+	done     chan struct{}
+}
+
+func (t *updateTask) Done() chan struct{} {
+	return t.done
 }
