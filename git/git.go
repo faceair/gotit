@@ -17,6 +17,8 @@ import (
 
 var vscRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+?)(/info/refs|/git-upload-pack|\?go-get=1)`)
 
+// NewServer create a Server instance
+// The gopath should be a valid folder and will store git repositories later
 func NewServer(gopath string) *Server {
 	err := os.Setenv("GOPATH", gopath)
 	if err != nil {
@@ -31,12 +33,14 @@ func NewServer(gopath string) *Server {
 	return g
 }
 
+// Server implement interface of betproxy.Client
 type Server struct {
 	gopath string
 	queue  chan string
 	upTime sync.Map
 }
 
+// Do receive client requests and return git repository information
 func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	match := vscRegex.FindStringSubmatch(req.URL.String())
 	if match == nil {
@@ -151,14 +155,17 @@ func (g *Server) cmd(dir string, args ...string) *exec.Cmd {
 	return cmd
 }
 
+// NewStdoutReader return an io.reader that closes the command when it finishes reading data
 func NewStdoutReader(stdout io.Reader, cmd *exec.Cmd) io.Reader {
 	return io.MultiReader(stdout, &StdoutCloser{cmd})
 }
 
+// StdoutCloser implement interface of io.Reader
 type StdoutCloser struct {
 	cmd *exec.Cmd
 }
 
+// Read wait and close the child process to avoid zombie process
 func (c *StdoutCloser) Read(p []byte) (n int, err error) {
 	if err = c.cmd.Wait(); err != nil {
 		return 0, err
@@ -166,6 +173,7 @@ func (c *StdoutCloser) Read(p []byte) (n int, err error) {
 	return 0, io.EOF
 }
 
+// NewLogBuffer create a LogBuffer instance
 func NewLogBuffer(prefix string) *LogBuffer {
 	return &LogBuffer{
 		prefix: prefix,
@@ -173,17 +181,20 @@ func NewLogBuffer(prefix string) *LogBuffer {
 	}
 }
 
+// LogBuffer implement interface of io.Writer
 type LogBuffer struct {
 	prefix string
 	buffer []byte
 }
 
+// Write write log to stdout and collect logs to buffer
 func (l *LogBuffer) Write(p []byte) (n int, err error) {
 	log.Printf("%s: %s", l.prefix, p)
 	l.buffer = append(l.buffer, p...)
 	return len(p), nil
 }
 
+// String return cached logs
 func (l *LogBuffer) String() string {
 	return string(l.buffer)
 }
