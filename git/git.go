@@ -1,8 +1,10 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +17,8 @@ import (
 	"github.com/faceair/betproxy"
 )
 
-var vscRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+?)(/info/refs|/git-upload-pack|\?go-get=1)`)
+var urlRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+?)(/info/refs|/git-upload-pack|\?go-get=1)`)
+var repoRegex = regexp.MustCompile(`<meta name="go-import" content="(.+?) git (.+)?">`)
 
 // NewServer create a Server instance
 // The gopath should be a valid folder and will store git repositories later
@@ -42,7 +45,7 @@ type Server struct {
 
 // Do receive client requests and return git repository information
 func (g *Server) Do(req *http.Request) (*http.Response, error) {
-	match := vscRegex.FindStringSubmatch(req.URL.String())
+	match := urlRegex.FindStringSubmatch(req.URL.String())
 	if match == nil {
 		return HTTPRedirect("https://github.com/faceair/gotit", req), nil
 	}
@@ -57,6 +60,11 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	}
 	switch urlPath {
 	case "?go-get=1":
+		repoPath, err := g.getVSCRoot(repoPath)
+		if err != nil {
+			return nil, err
+		}
+
 		html := fmt.Sprintf(`<meta name="go-import" content="%s git https://%s">`, repoPath, repoPath)
 		return betproxy.HTTPText(http.StatusOK, nil, html, req), nil
 
@@ -110,7 +118,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		return betproxy.NewResponse(http.StatusOK, header, NewStdoutReader(stdout, cmd), req), stdin.Close()
 	}
 
-	return betproxy.HTTPError(http.StatusBadRequest, "url not match", req), nil
+	return nil, errors.New("url not match")
 }
 
 func (g *Server) cloneLoop() {
@@ -152,8 +160,32 @@ func (g *Server) clone(repoPath string) error {
 	return err
 }
 
-func (g *Server) checkRepo(dir string) bool {
-	_, err := os.Stat(fmt.Sprintf("%s/src/%s/.git", g.gopath, dir))
+func (g *Server) getVSCRoot(repoPath string) (string, error) {
+	dirs := strings.Split(repoPath, "/")
+	for len(dirs) > 0 {
+		guessPath := strings.Join(dirs, "/")
+		if g.checkRepo(guessPath) {
+			return guessPath, nil
+		}
+		dirs = dirs[:len(dirs)-1]
+	}
+	res, err := http.Get(fmt.Sprintf("https://%s?go-get=1", repoPath))
+	if err != nil {
+		return "", err
+	}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	matches := repoRegex.FindStringSubmatch(string(body))
+	if len(matches) == 3 {
+		return matches[1], nil
+	}
+	return "", errors.New("parse meta tags failed")
+}
+
+func (g *Server) checkRepo(repoPath string) bool {
+	_, err := os.Stat(fmt.Sprintf("%s/src/%s/.git", g.gopath, repoPath))
 	return err == nil
 }
 

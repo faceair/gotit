@@ -43,7 +43,7 @@ func TestMetadata(t *testing.T) {
 	server := NewTestServer()
 	defer os.RemoveAll(server.gopath)
 
-	u, err := url.Parse("https://faceair.hi/gotit?go-get=1")
+	u, err := url.Parse("https://golang.org/x/time/rate?go-get=1")
 	if err != nil {
 		t.Error("parse url failed")
 	}
@@ -57,7 +57,7 @@ func TestMetadata(t *testing.T) {
 	if err != nil {
 		t.Error("read body failed")
 	}
-	if !strings.Contains(string(body), `<meta name="go-import" content="faceair.hi/gotit git https://faceair.hi/gotit">`) {
+	if !strings.Contains(string(body), `<meta name="go-import" content="golang.org/x/time git https://golang.org/x/time">`) {
 		t.Error("read metadata failed")
 	}
 }
