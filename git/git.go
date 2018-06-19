@@ -44,7 +44,7 @@ type Server struct {
 func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	match := vscRegex.FindStringSubmatch(req.URL.String())
 	if match == nil {
-		return betproxy.HTTPError(http.StatusBadRequest, "url not match", req), nil
+		return HTTPRedirect("https://github.com/faceair/gotit", req), nil
 	}
 
 	repoPath := match[1]
@@ -221,4 +221,13 @@ type cloneTask struct {
 
 func (t *cloneTask) Done() chan struct{} {
 	return t.done
+}
+
+// HTTPRedirect create a temporary redirect http.Response with giving url
+func HTTPRedirect(url string, req *http.Request) *http.Response {
+	res := betproxy.NewResponse(http.StatusTemporaryRedirect, http.Header{
+		"Location": []string{url},
+	}, nil, req)
+	res.ContentLength = 0
+	return res
 }

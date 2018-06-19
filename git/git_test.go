@@ -34,7 +34,7 @@ func TestURLNotMatch(t *testing.T) {
 	if err != nil {
 		t.Error("request failed")
 	}
-	if res.StatusCode != http.StatusBadRequest {
+	if res.StatusCode != http.StatusTemporaryRedirect {
 		t.Error("url should not matched!")
 	}
 }
