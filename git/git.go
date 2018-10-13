@@ -17,7 +17,7 @@ import (
 	"github.com/faceair/betproxy"
 )
 
-var urlRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+?)(/info/refs|/git-upload-pack|\?go-get=1)`)
+var urlRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+((/[A-Za-z0-9_.-]+)+?)?)/?(/info/refs|/git-upload-pack|\?go-get=1)`)
 var repoRegex = regexp.MustCompile(`content="(.+?) git (.+)?"`)
 
 // NewServer create a Server instance
@@ -51,7 +51,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	repoPath := match[1]
-	urlPath := match[3]
+	urlPath := match[4]
 
 	header := http.Header{
 		"Expires":       []string{"Fri, 01 Jan 1980 00:00:00 GMT"},
