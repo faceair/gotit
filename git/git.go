@@ -18,7 +18,7 @@ import (
 )
 
 var urlRegex = regexp.MustCompile(`([A-Za-z0-9_.-]+((/[A-Za-z0-9_.-]+)+?)?)/?(/info/refs|/git-upload-pack|\?go-get=1)`)
-var repoRegex = regexp.MustCompile(`content="(.+?) git (.+)?"`)
+var repoRegex = regexp.MustCompile(`content="(.+?)\s*git\s*(.+)?"`)
 
 // NewServer create a Server instance
 // The gopath should be a valid folder and will store git repositories later
