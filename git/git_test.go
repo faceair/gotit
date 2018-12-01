@@ -17,7 +17,7 @@ func NewTestServer() *Server {
 		log.Fatal(err)
 	}
 
-	return NewServer(dir)
+	return NewServer(dir, "./git.go")
 }
 
 func TestURLNotMatch(t *testing.T) {

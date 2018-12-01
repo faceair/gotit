@@ -33,7 +33,10 @@ func main() {
 		os.Exit(0)
 	}
 
-	cacert, cakey, err := loadCA(capath)
+	certpath := path.Join(capath, "gotit.cert.pem")
+	keypath := path.Join(capath, "gotit.key.pem")
+
+	cacert, cakey, err := loadCA(certpath, keypath)
 	if err != nil {
 		panic(err)
 	}
@@ -49,17 +52,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	service.SetClient(git.NewServer(gopath))
+	service.SetClient(git.NewServer(gopath, certpath))
 
 	log.Fatal(service.Listen())
 }
 
-func loadCA(capath string) (*x509.Certificate, *rsa.PrivateKey, error) {
-	certpath := path.Join(capath, "gotit.cert.pem")
-	keypath := path.Join(capath, "gotit.key.pem")
-
+func loadCA(certpath, keypath string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	if _, err := os.Stat(certpath); os.IsNotExist(err) {
-		err := generateCA(capath, certpath, keypath)
+		err := generateCA(certpath, keypath)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -93,12 +93,7 @@ func loadCA(capath string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	return rawCert, rawKey, nil
 }
 
-func generateCA(capath, certpath, keypath string) error {
-	err := os.MkdirAll(capath, os.ModePerm)
-	if err != nil {
-		return err
-	}
-
+func generateCA(certpath, keypath string) error {
 	cacert, cakey, err := mitm.NewAuthority("gotit", "faceair", 10*365*24*time.Hour)
 	if err != nil {
 		return err

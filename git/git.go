@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -22,15 +23,21 @@ var repoRegex = regexp.MustCompile(`content="(.+?)\s+git\s+(.+)?"`)
 
 // NewServer create a Server instance
 // The gopath should be a valid folder and will store git repositories later
-func NewServer(gopath string) *Server {
+func NewServer(gopath, certpath string) *Server {
 	err := os.Setenv("GOPATH", gopath)
 	if err != nil {
 		panic(err)
 	}
 
+	certfile, err := ioutil.ReadFile(certpath)
+	if err != nil {
+		panic(err)
+	}
+
 	g := &Server{
-		gopath: gopath,
-		queue:  make(chan *cloneTask, 1024),
+		gopath:   gopath,
+		certfile: certfile,
+		queue:    make(chan *cloneTask, 1024),
 	}
 	go g.cloneLoop()
 	return g
@@ -38,16 +45,26 @@ func NewServer(gopath string) *Server {
 
 // Server implement interface of betproxy.Client
 type Server struct {
-	gopath string
-	queue  chan *cloneTask
-	upTime sync.Map
+	gopath   string
+	certfile []byte
+	queue    chan *cloneTask
+	upTime   sync.Map
 }
 
 // Do receive client requests and return git repository information
 func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	match := urlRegex.FindStringSubmatch(req.URL.String())
 	if match == nil {
-		return HTTPRedirect("https://github.com/faceair/gotit", req), nil
+		switch req.URL.Path {
+		case "/ssl":
+			res := betproxy.NewResponse(http.StatusOK, http.Header{
+				"Content-Disposition": []string{"attachment; filename=gotit.crt"},
+			}, bytes.NewReader(g.certfile), req)
+			res.ContentLength = int64(len(g.certfile))
+			return res, nil
+		default:
+			return HTTPRedirect("https://github.com/faceair/gotit", req), nil
+		}
 	}
 
 	repoPath := match[1]
