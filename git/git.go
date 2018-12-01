@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -39,7 +40,7 @@ func NewServer(gopath, certpath string) *Server {
 		certfile: certfile,
 		queue:    make(chan *cloneTask, 1024),
 	}
-	go g.cloneLoop()
+	go g.cloneLoop(10)
 	return g
 }
 
@@ -138,15 +139,17 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 	return nil, errors.New("url not match")
 }
 
-func (g *Server) cloneLoop() {
-	for {
-		task := <-g.queue
-		if g.shouldUpdate(task.repoPath) {
-			if err := g.clone(task.repoPath); err != nil {
-				log.Printf("Clone Failed: %s", err.Error())
+func (g *Server) cloneLoop(concurrency int) {
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			task := <-g.queue
+			if g.shouldUpdate(task.repoPath) {
+				if err := g.clone(task.repoPath); err != nil {
+					log.Printf("Clone Failed: %s", err.Error())
+				}
 			}
-		}
-		close(task.Done())
+			close(task.Done())
+		}()
 	}
 }
 
@@ -162,8 +165,11 @@ func (g *Server) shouldUpdate(repoPath string) bool {
 }
 
 func (g *Server) clone(repoPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	defer cancel()
+
 	logger := NewLogBuffer("Go Get")
-	cmd := exec.Command("go", []string{"get", "-d", "-f", "-u", "-v", repoPath}...)
+	cmd := exec.CommandContext(ctx, "go", []string{"get", "-d", "-f", "-u", "-v", "-insecure", repoPath}...)
 	cmd.Dir = g.gopath
 	cmd.Stderr = logger
 	err := cmd.Run()
