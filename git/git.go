@@ -173,8 +173,12 @@ func (g *Server) clone(repoPath string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
+	cmd := exec.Command("git", "reset", "--hard")
+	cmd.Dir = repoPath
+	cmd.Run()
+
 	logger := NewLogBuffer("Go Get")
-	cmd := exec.CommandContext(ctx, "go", []string{"get", "-d", "-f", "-u", "-v", "-insecure", repoPath}...)
+	cmd = exec.CommandContext(ctx, "go", []string{"get", "-d", "-f", "-u", "-v", "-insecure", repoPath}...)
 	cmd.Dir = g.gopath
 	cmd.Stderr = logger
 	err := cmd.Run()
