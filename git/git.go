@@ -90,7 +90,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		if !g.checkRepo(repoPath) {
 			task := newCloneTask(repoPath)
 			g.queue <- task
-			<-task.Done()
+			<-task.Done
 		} else {
 			select {
 			case g.queue <- newCloneTask(repoPath):
@@ -102,7 +102,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		args := []string{service, "--stateless-rpc", "--advertise-refs", "."}
 		refs, err := g.cmd(repoPath, args...).Output()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s %s", refs, err)
 		}
 		serverAdvert := fmt.Sprintf("# service=git-%s\n", service)
 		body := fmt.Sprintf("%04x%s0000%s", len(serverAdvert)+4, serverAdvert, refs)
@@ -111,8 +111,11 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		return betproxy.HTTPText(http.StatusOK, header, body, req), nil
 
 	case "/git-upload-pack":
+		logger := NewLogBuffer("Git Upload Pack")
+
 		args := []string{"upload-pack", "--stateless-rpc", "."}
 		cmd := g.cmd(repoPath, args...)
+		cmd.Stderr = logger
 
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
@@ -133,7 +136,7 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 		}
 
 		header.Set("Content-Type", "application/x-git-upload-pack-result")
-		return betproxy.NewResponse(http.StatusOK, header, NewStdoutReader(stdout, cmd), req), stdin.Close()
+		return betproxy.NewResponse(http.StatusOK, header, NewStdoutReader(stdout, cmd), req), nil
 	}
 
 	return nil, errors.New("url not match")
@@ -142,13 +145,15 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 func (g *Server) cloneLoop(concurrency int) {
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			task := <-g.queue
-			if g.shouldUpdate(task.repoPath) {
-				if err := g.clone(task.repoPath); err != nil {
-					log.Printf("Clone Failed: %s", err.Error())
+			for {
+				task := <-g.queue
+				if g.shouldUpdate(task.RepoPath) {
+					if err := g.clone(task.RepoPath); err != nil {
+						log.Printf("Clone %s failed: %s", task.RepoPath, err.Error())
+					}
 				}
+				close(task.Done)
 			}
-			close(task.Done())
 		}()
 	}
 }
@@ -264,18 +269,14 @@ func (l *LogBuffer) String() string {
 
 func newCloneTask(repoPath string) *cloneTask {
 	return &cloneTask{
-		repoPath: repoPath,
-		done:     make(chan struct{}),
+		RepoPath: repoPath,
+		Done:     make(chan struct{}),
 	}
 }
 
 type cloneTask struct {
-	repoPath string
-	done     chan struct{}
-}
-
-func (t *cloneTask) Done() chan struct{} {
-	return t.done
+	RepoPath string
+	Done     chan struct{}
 }
 
 // HTTPRedirect create a temporary redirect http.Response with giving url
