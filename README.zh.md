@@ -17,9 +17,9 @@ Gotit 是一个由 [betproxy](https://github.com/faceair/betproxy) 强力驱动�
 
 ## Gotit 有什么特性？
 
-- **快** 命中缓存时拉取速度非常快！
-- **可靠** 断网或源库被删后 Gotit 可以依靠缓存继续工作 （天天开十X大都不怕 🙌）
-- **透明** 理论上支持所有 Go 包管理工具（需要关闭 HTTPS 证书校验）
+**快** 命中缓存时拉取速度非常快！
+**可靠** 断网或源库被删后 Gotit 可以依靠缓存继续工作 （天天开十X大都不怕 🙌）
+**透明** 理论上支持所有 Go 包管理工具（需要关闭 HTTPS 证书校验）
 
 ## 部署
 
@@ -41,7 +41,31 @@ $GOPATH/bin/gotit -port 8080
 ```
 直接运行 `gotit` 可以查看其他命令的使用帮助，默认 `gotit` 使用系统 `GOPATH` 保存依赖包。
 
+### 配置
+
+### CI 或个人使用直接信任证书 （推荐）
+
+```
+# 导入环境变量和证书
+export HTTPS_PROXY=http://127.0.0.1:3128
+curl -o /usr/local/share/ca-certificates/gotit.crt http://127.0.0.1:3128/ssl && update-ca-certificates
+
+# 正常使用就好
+go get -v github.com/golang/dep/cmd/dep
+go get -v github.com/axw/gocov/gocov
+go get -v github.com/AlekSi/gocov-xml
+go get -v golang.org/x/lint/golint
+dep ensure -v
+go mod download
+glide install -v
+
+# 构建完毕可以删除证书
+rm /usr/local/share/ca-certificates/gotit.crt && update-ca-certificates
+```
+
 ### 配置包管理工具
+
+如果你担心导入证书的安全问题，可以尝试绕过包管理工具的 HTTPS 校验。
 
 #### dep
 
@@ -70,10 +94,6 @@ HTTPS_PROXY=http://127.0.0.1:8080 glide install
 ```
 HTTPS_PROXY=http://127.0.0.1:8080 GIT_SSL_NO_VERIFY=true go get -v -insecure github.com/faceair/gotit
 ```
-
-#### 其他包管理工具
-
-TODO
 
 ## 常见问题
 

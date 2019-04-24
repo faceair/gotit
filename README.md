@@ -41,7 +41,29 @@ $GOPATH/bin/gotit -port 8080
 ```
 Run `gotit` directly see help for other commands. Gotit use system `GOPATH` to save dependencies by default.
 
+### CI or individual use direct trust certificate (recommended)
+
+```
+# Import environment variables and certificates
+export HTTPS_PROXY=http://127.0.0.1:3128
+curl -o /usr/local/share/ca-certificates/gotit.crt http://127.0.0.1:3128/ssl && update-ca-certificates
+
+# Normal use
+go get -v github.com/golang/dep/cmd/dep
+go get -v github.com/axw/gocov/gocov
+go get -v github.com/AlekSi/gocov-xml
+go get -v golang.org/x/lint/golint
+dep ensure -v
+go mod download
+glide install -v
+
+# Delete the certificate after the build
+rm /usr/local/share/ca-certificates/gotit.crt && update-ca-certificates
+```
+
 ### Configure dependency management tool
+
+If you are concerned about the security of importing certificates, you can try to bypass the HTTPS verification of the package management tool.
 
 #### dep
 
@@ -70,10 +92,6 @@ HTTPS_PROXY=http://127.0.0.1:8080 glide install
 ```
 HTTPS_PROXY=http://127.0.0.1:8080 GIT_SSL_NO_VERIFY=true go get -v -insecure github.com/faceair/gotit
 ```
-
-#### other
-
-TODO
 
 ## FAQ
 
