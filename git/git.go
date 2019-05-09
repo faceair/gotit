@@ -135,6 +135,11 @@ func (g *Server) Do(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 
+		err = stdin.Close()
+		if err != nil {
+			return nil, err
+		}
+
 		header.Set("Content-Type", "application/x-git-upload-pack-result")
 		return betproxy.NewResponse(http.StatusOK, header, NewStdoutReader(stdout, cmd), req), nil
 	}
